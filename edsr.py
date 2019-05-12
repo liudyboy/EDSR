@@ -15,10 +15,10 @@ class MeanShift(nn.Conv2d):
 class _Residual_Block(nn.Module): 
     def __init__(self):
         super(_Residual_Block, self).__init__()
-
-        self.conv1 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, stride=1, padding=1, bias=False)
+        out_features = 128
+        self.conv1 = nn.Conv2d(in_channels=out_features, out_channels=out_features, kernel_size=3, stride=1, padding=1, bias=False)
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(in_channels=out_features, out_channels=out_features, kernel_size=3, stride=1, padding=1, bias=False)
 
     def forward(self, x): 
         identity_data = x
@@ -33,22 +33,23 @@ class Net(nn.Module):
         super(Net, self).__init__()
 
         rgb_mean = (0.4488, 0.4371, 0.4040)
+        self.out_features = 128
         self.sub_mean = MeanShift(rgb_mean, -1)
 
-        self.conv_input = nn.Conv2d(in_channels=3, out_channels=256, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv_input = nn.Conv2d(in_channels=3, out_channels=self.out_features, kernel_size=3, stride=1, padding=1, bias=False)
 
-        self.residual = self.make_layer(_Residual_Block, 1)
+        self.residual = self.make_layer(_Residual_Block, 8)
 
-        self.conv_mid = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv_mid = nn.Conv2d(in_channels=self.out_features, out_channels=self.out_features, kernel_size=3, stride=1, padding=1, bias=False)
 
         self.upscale4x = nn.Sequential(
-            nn.Conv2d(in_channels=256, out_channels=256*4, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.PixelShuffle(2),
-            nn.Conv2d(in_channels=256, out_channels=256*4, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.PixelShuffle(2),
+            nn.Conv2d(in_channels=self.out_features, out_channels=48, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.PixelShuffle(4),
+            # nn.Conv2d(in_channels=self.out_features, out_channels=self.out_features*4, kernel_size=3, stride=1, padding=1, bias=False),
+            # nn.PixelShuffle(2),
         )
 
-        self.conv_output = nn.Conv2d(in_channels=256, out_channels=3, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv_output = nn.Conv2d(in_channels=self.out_features, out_channels=3, kernel_size=3, stride=1, padding=1, bias=False)
 
         self.add_mean = MeanShift(rgb_mean, 1)
 
@@ -72,11 +73,17 @@ class Net(nn.Module):
     def forward(self, x):
         out = self.sub_mean(x)
         out = self.conv_input(out)
+        # print (" 1 layer complete, out.shape: ", out.shape)
+        # torch.save(out, 'out.pt')
         residual = out
         out = self.conv_mid(self.residual(out))
+        # print (" residual layer complete, out shape:", out.shape)
         out = torch.add(out,residual)
         out = self.upscale4x(out)
-        out = self.conv_output(out)
+        # print (" upscale layer complete, out shape:", out.shape)
+        # out = self.conv_output(out)
+        # print('complete-1 result shape:', out.shape)
         out = self.add_mean(out)
+        # print('complete result shape:', out.shape)
         return out
  

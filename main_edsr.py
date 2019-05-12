@@ -12,9 +12,9 @@ from dataset import DatasetFromYouKu
 # Training settings
 parser = argparse.ArgumentParser(description="PyTorch EDSR")
 parser.add_argument("--batchSize", type=int, default=2, help="training batch size")
-parser.add_argument("--nEpochs", type=int, default=100000, help="number of epochs to train for")
+parser.add_argument("--nEpochs", type=int, default=10, help="number of epochs to train for")
 parser.add_argument("--lr", type=float, default=1e-4, help="Learning Rate. Default=1e-4")
-parser.add_argument("--step", type=int, default=200, help="Sets the learning rate to the initial LR decayed by momentum every n epochs, Default: n=10")
+parser.add_argument("--step", type=int, default=1000, help="Sets the learning rate to the initial LR decayed by momentum every n epochs, Default: n=10")
 parser.add_argument("--cuda", action="store_true", help="use cuda?")
 parser.add_argument("--resume", default='', type=str, help="path to latest checkpoint (default: none)")
 parser.add_argument("--start-epoch", default=1, type=int, help="manual epoch number (useful on restarts)")
@@ -44,7 +44,7 @@ def main():
     cudnn.benchmark = True
     print("===> Loading datasets")
     youku_data_set = DatasetFromYouKu()
-    youku_data_set_loader = DataLoader(dataset=youku_data_set, num_workers=opt.threads, batch_size=opt.batchSize, shuffle=True)
+    youku_data_set_loader = DataLoader(dataset=youku_data_set, num_workers=opt.threads, batch_size=opt.batchSize)
 
     print("===> Building model")
     model = Net()
@@ -52,8 +52,6 @@ def main():
 
     print("===> Setting GPU")
     if cuda:
-        # model = model.cuda(device=GPU)
-        # criterion = criterion.cuda(device=GPU)
         model = model.cuda(1)
         criterion = criterion.cuda(1)
 
@@ -73,7 +71,8 @@ def main():
     print("===> Training")
     for epoch in range(opt.start_epoch, opt.nEpochs + 1): 
         train(youku_data_set_loader, optimizer, model, criterion, epoch)
-        save_checkpoint(model, epoch)
+        if epoch % 1000 == 0:
+            save_checkpoint(model, epoch)
 
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10"""
@@ -83,33 +82,31 @@ def adjust_learning_rate(optimizer, epoch):
 def train(dataset, optimizer, model, criterion, epoch):
     global cuda
     lr = adjust_learning_rate(optimizer, epoch-1)
-    
     for param_group in optimizer.param_groups:
-        param_group["lr"] = lr  
+        param_group["lr"] = lr
 
     print("Epoch={}, lr={}".format(epoch, optimizer.param_groups[0]["lr"]))
     model.train()
 
-    # for iteration, batch in enumerate(training_data_loader, 1):
     for iteration, batch in enumerate(dataset, 1):
-        # print('opt batch size:', opt.batchSize)
         x, y = batch[0], batch[1]
         input, target = torch.as_tensor(x, dtype=torch.float32), torch.as_tensor(y, dtype=torch.float32)
+        target.requires_grad = False
 
         if cuda:
             input = input.cuda(1)
             target = target.cuda(1)
 
+        out = model(input)
         loss = criterion(model(input), target)
 
         optimizer.zero_grad()
-        
         loss.backward()
 
         optimizer.step()
-        
-        if iteration%100 == 0:
-            print("===> Epoch[{}]({}): Loss: {:.10f}".format(epoch, iteration, loss.data[0]))
+        if iteration%10 == 0:
+            print("===> Epoch[{}]({})".format(epoch, iteration))
+            print('Loss: ', loss.data)
 
 def save_checkpoint(model, epoch):
     model_folder = "checkpoint/"

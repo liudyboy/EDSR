@@ -28,8 +28,8 @@ class DatasetFromYouKu(data.Dataset):
     def load_image(self, path):
         path = path[:-1]
         img = scipy.misc.imread(path)
-        img = np.asarray(img)
-        img = np.transpose(img, (2, 0, 1))
+        img = np.asarray(img, dtype=np.float32)
+        img = np.transpose(img, (2, 0, 1))/255.
         return img
 
 
